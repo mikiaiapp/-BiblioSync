@@ -1,0 +1,12 @@
+services:
+  bibliosync:
+    build: .
+    container_name: bibliosync
+    image: bibliosync:latest
+    ports:
+      - "6080:6080"
+    volumes:
+      - ./data:/data
+    environment:
+      - RESOLUTION=1280x720
+    restart: unless-stopped
