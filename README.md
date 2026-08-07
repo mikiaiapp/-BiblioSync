@@ -97,10 +97,11 @@ build.bat
 El contenedor Docker de BiblioSync viene preconfigurado con un servidor X11 virtual (Xvfb), un gestor de ventanas ligero (Fluxbox), un servidor VNC (x11vnc) y un cliente web noVNC. Esto permite acceder a la interfaz de usuario directamente desde **cualquier navegador web**, sin necesidad de instalar clientes en tu ordenador.
 
 ### 1. Carpetas y Volúmenes a crear en tu NAS
-Para un funcionamiento idóneo, solo necesitas configurar dos volúmenes en el contenedor:
+Para un funcionamiento idóneo, configurarás los siguientes tres volúmenes en el contenedor:
 
 * **`/volume1/docker/bibliosync/data` (Mapeado a `/data`)**: Almacenará la configuración de la app (`settings.json`) y la base de datos local SQLite (`bibliosync.db`) para que persistan entre reinicios del contenedor.
-* **`/volume1/libros` (Mapeado a `/libros`)**: La carpeta raíz compartida de tu NAS que agrupa tus carpetas de libros (biblioteca de Calibre, descargas y destino). Mapeando este directorio raíz, la aplicación tendrá acceso a todas sus subcarpetas y podrás seleccionarlas dinámicamente desde la interfaz.
+* **`/volume1/docker/calibreweb` (Mapeado a `/calibreweb`)**: La ubicación de tu biblioteca de Calibre (por ejemplo, conteniendo la subcarpeta `Biblioteca` con el archivo `metadata.db` de Calibre).
+* **`/volume1/home/Descargas` (Mapeado a `/descargas`)**: Tu directorio de descargas en el NAS. Esta carpeta se utilizará tanto para ubicar los libros a analizar (orígenes) como para guardar los libros seleccionados para importar (destino). Podrás navegar por sus subcarpetas de forma dinámica desde el selector de la app.
 
 ### 2. Variables de Entorno
 * **`RESOLUTION`** *(Opcional)*: Define la resolución de pantalla de la interfaz gráfica en el navegador. Por defecto es `1280x720`. Ejemplo: `RESOLUTION=1440x900`.
@@ -134,8 +135,10 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
        volumes:
          # Ruta persistente de datos de la app (BD y configuraciones)
          - /volume1/docker/bibliosync/data:/data
-         # Carpeta raíz compartida que contiene tus subcarpetas de libros
-         - /volume1/libros:/libros
+         # Acceso a la biblioteca de Calibre (para indexar metadata.db)
+         - /volume1/docker/calibreweb:/calibreweb
+         # Carpeta para descargas, escaneo y exportación de nuevos libros
+         - /volume1/home/Descargas:/descargas
        environment:
          - RESOLUTION=1280x720
        restart: unless-stopped
@@ -155,8 +158,8 @@ Una vez que el Stack se haya desplegado y muestre el estado **Running**:
    ```
 3. Se abrirá la consola de noVNC mostrando la aplicación **BiblioSync** lista para usar.
 4. **Configura las rutas dinámicamente desde la interfaz:**
-   - Introduce `/libros/calibre` (o la subcarpeta donde tengas tu biblioteca principal) en el campo **Biblioteca Calibre**.
-   - Introduce `/libros/importar` (o la subcarpeta de destino) en el campo **Carpeta Destino**.
-   - Haz clic en **Añadir Carpeta** y selecciona `/libros/descargas` (o la carpeta temporal que desees escanear en cada momento).
+   - Introduce `/calibreweb/Biblioteca` (o la subcarpeta donde tengas tu biblioteca principal de Calibre) en el campo **Biblioteca Calibre**.
+   - Introduce `/descargas/importar` (o cualquier subcarpeta que desees usar para recibir los libros limpios) en el campo **Carpeta Destino**.
+   - Haz clic en **Añadir Carpeta** y selecciona `/descargas/carpetas_a_analizar` (utilizando el selector para elegir cualquier directorio de descargas al vuelo).
    - Selecciona el método de comparación deseado y pulsa en **Analizar** y después en **Copiar Libros**.
    - Toda la configuración de rutas y el historial de sincronizaciones se guardará automáticamente en tu volumen persistente `/data`.

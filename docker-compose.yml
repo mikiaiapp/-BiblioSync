@@ -6,9 +6,11 @@ services:
     ports:
       - "6080:6080"
     volumes:
-      - ./data:/data
-      # Mapea aquí la carpeta compartida de tu NAS que contiene tus libros
-      # - /volume1/libros:/libros
+      - /volume1/docker/bibliosync/data:/data
+      # Acceso a la biblioteca de Calibre (para indexar metadata.db)
+      - /volume1/docker/calibreweb:/calibreweb
+      # Carpeta para descargas, escaneo y exportación de nuevos libros
+      - /volume1/home/Descargas:/descargas
     environment:
       - RESOLUTION=1280x720
     restart: unless-stopped
