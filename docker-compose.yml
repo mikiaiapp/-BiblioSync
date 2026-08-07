@@ -7,6 +7,8 @@ services:
       - "6080:6080"
     volumes:
       - ./data:/data
+      # Mapea aquí la carpeta compartida de tu NAS que contiene tus libros
+      # - /volume1/libros:/libros
     environment:
       - RESOLUTION=1280x720
     restart: unless-stopped

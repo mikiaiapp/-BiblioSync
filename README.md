@@ -97,15 +97,13 @@ build.bat
 El contenedor Docker de BiblioSync viene preconfigurado con un servidor X11 virtual (Xvfb), un gestor de ventanas ligero (Fluxbox), un servidor VNC (x11vnc) y un cliente web noVNC. Esto permite acceder a la interfaz de usuario directamente desde **cualquier navegador web**, sin necesidad de instalar clientes en tu ordenador.
 
 ### 1. Carpetas y Volúmenes a crear en tu NAS
-Antes de desplegar el contenedor, te recomendamos estructurar las carpetas en tu NAS (por ejemplo, dentro del volumen principal `/volume1` de Synology) para mapearlas correctamente al contenedor:
+Para un funcionamiento idóneo, solo necesitas configurar dos volúmenes en el contenedor:
 
-* **`/volume1/docker/bibliosync/data`**: Almacenará la configuración de la app (`settings.json`) y la base de datos local SQLite (`bibliosync.db`) para que persistan entre reinicios del contenedor.
-* **`/volume1/libros/calibre`**: Tu biblioteca principal de libros gestionada por Calibre (contiene la base de datos `metadata.db` de Calibre y los directorios de autores).
-* **`/volume1/libros/descargas`**: Carpeta de origen donde descargas o almacenas temporalmente nuevos ebooks a analizar.
-* **`/volume1/libros/importar`**: Carpeta de destino donde se enviarán los libros listos para que los importes a Calibre sin duplicados.
+* **`/volume1/docker/bibliosync/data` (Mapeado a `/data`)**: Almacenará la configuración de la app (`settings.json`) y la base de datos local SQLite (`bibliosync.db`) para que persistan entre reinicios del contenedor.
+* **`/volume1/libros` (Mapeado a `/libros`)**: La carpeta raíz compartida de tu NAS que agrupa tus carpetas de libros (biblioteca de Calibre, descargas y destino). Mapeando este directorio raíz, la aplicación tendrá acceso a todas sus subcarpetas y podrás seleccionarlas dinámicamente desde la interfaz.
 
 ### 2. Variables de Entorno
-* **`RESOLUTION`** *(Opcional)*: Define la resolución de pantalla de la interfaz gráfica en el navegador. Por defecto es `1280x720`. Ejemplo: `RESOLUTION=1440x900` para pantallas de mayor resolución.
+* **`RESOLUTION`** *(Opcional)*: Define la resolución de pantalla de la interfaz gráfica en el navegador. Por defecto es `1280x720`. Ejemplo: `RESOLUTION=1440x900`.
 
 ---
 
@@ -119,12 +117,12 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
 4. En **Build method**, selecciona **Repository**.
 5. Rellena los campos con los siguientes datos del repositorio:
    - **Repository URL:** `https://github.com/mikiaiapp/-BiblioSync`
-   - **Repository reference:** `refs/heads/main` (o déjalo vacío para usar la rama principal).
+   - **Repository reference:** `refs/heads/main`
    - **Compose path:** `docker-compose.yml`
-6. En la sección **Environment variables**, puedes añadir variables de entorno adicionales si deseas personalizar la resolución:
-   - Añade una variable con nombre `RESOLUTION` y el valor deseado (ej. `1280x720`).
+6. En la sección **Environment variables**, añade si lo deseas la variable de resolución:
+   - Nombre: `RESOLUTION`, Valor: `1280x720` (o la que prefieras).
 7. **Modificar los mapeos de volúmenes (Binds):**
-   Asegúrate de editar la configuración en la interfaz para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml`:
+   Edita la configuración para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml`:
    
    ```yaml
    services:
@@ -134,14 +132,10 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
        ports:
          - "6080:6080"
        volumes:
-         # Ruta persistente de datos de la app
+         # Ruta persistente de datos de la app (BD y configuraciones)
          - /volume1/docker/bibliosync/data:/data
-         # Acceso a la biblioteca de Calibre (solo lectura o lectura/escritura)
-         - /volume1/libros/calibre:/calibre_library
-         # Acceso a carpetas de origen para escanear
-         - /volume1/libros/descargas:/source_books
-         # Acceso a carpeta de destino para el copiado
-         - /volume1/libros/importar:/destination_books
+         # Carpeta raíz compartida que contiene tus subcarpetas de libros
+         - /volume1/libros:/libros
        environment:
          - RESOLUTION=1280x720
        restart: unless-stopped
@@ -159,8 +153,10 @@ Una vez que el Stack se haya desplegado y muestre el estado **Running**:
    ```text
    http://<IP_DE_TU_NAS>:6080
    ```
-3. Se abrirá la consola de noVNC mostrando la aplicación **BiblioSync** lista para usar:
-   - Introduce `/calibre_library` en el campo **Biblioteca Calibre**.
-   - Introduce `/destination_books` en el campo **Carpeta Destino**.
-   - Haz clic en **Añadir Carpeta** y selecciona `/source_books` para escanear.
-   - Elige tu método de comparación y pulsa en **Analizar** y luego en **Copiar Libros** para organizar tu catálogo de lectura automáticamente.
+3. Se abrirá la consola de noVNC mostrando la aplicación **BiblioSync** lista para usar.
+4. **Configura las rutas dinámicamente desde la interfaz:**
+   - Introduce `/libros/calibre` (o la subcarpeta donde tengas tu biblioteca principal) en el campo **Biblioteca Calibre**.
+   - Introduce `/libros/importar` (o la subcarpeta de destino) en el campo **Carpeta Destino**.
+   - Haz clic en **Añadir Carpeta** y selecciona `/libros/descargas` (o la carpeta temporal que desees escanear en cada momento).
+   - Selecciona el método de comparación deseado y pulsa en **Analizar** y después en **Copiar Libros**.
+   - Toda la configuración de rutas y el historial de sincronizaciones se guardará automáticamente en tu volumen persistente `/data`.
