@@ -101,7 +101,7 @@ Para un funcionamiento idóneo, configurarás los siguientes tres volúmenes en 
 
 * **`/volume1/docker/bibliosync/data` (Mapeado a `/data`)**: Almacenará la configuración de la app (`settings.json`) y la base de datos local SQLite (`bibliosync.db`) para que persistan entre reinicios del contenedor.
 * **`/volume1/docker/calibreweb` (Mapeado a `/calibreweb`)**: La ubicación de tu biblioteca de Calibre (por ejemplo, conteniendo la subcarpeta `Biblioteca` con el archivo `metadata.db` de Calibre).
-* **`/volume1/home/Descargas` (Mapeado a `/descargas`)**: Tu directorio de descargas en el NAS. Esta carpeta se utilizará tanto para ubicar los libros a analizar (orígenes) como para guardar los libros seleccionados para importar (destino). Podrás navegar por sus subcarpetas de forma dinámica desde el selector de la app.
+* **`/volume1/homes/XXXX/Descargas` (Mapeado a `/descargas`)**: Tu directorio de descargas en el NAS (donde `XXXX` es tu nombre de usuario en el NAS; por ejemplo, `/volume1/homes/MIKI/Descargas`). Esta carpeta se utilizará tanto para ubicar los libros a analizar (orígenes) como para guardar los libros seleccionados para importar (destino). Podrás navegar por sus subcarpetas de forma dinámica desde el selector de la app.
 
 ### 2. Variables de Entorno
 * **`RESOLUTION`** *(Opcional)*: Define la resolución de pantalla de la interfaz gráfica en el navegador. Por defecto es `1280x720`. Ejemplo: `RESOLUTION=1440x900`.
@@ -123,7 +123,7 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
 6. En la sección **Environment variables**, añade si lo deseas la variable de resolución:
    - Nombre: `RESOLUTION`, Valor: `1280x720` (o la que prefieras).
 7. **Modificar los mapeos de volúmenes (Binds):**
-   Edita la configuración para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml`:
+   Edita la configuración para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml` (recuerda cambiar `XXXX` por tu usuario de NAS):
    
    ```yaml
    services:
@@ -137,8 +137,8 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
          - /volume1/docker/bibliosync/data:/data
          # Acceso a la biblioteca de Calibre (para indexar metadata.db)
          - /volume1/docker/calibreweb:/calibreweb
-         # Carpeta para descargas, escaneo y exportación de nuevos libros
-         - /volume1/home/Descargas:/descargas
+         # Carpeta de descargas (cambia XXXX por tu usuario de NAS, ej: MIKI)
+         - /volume1/homes/XXXX/Descargas:/descargas
        environment:
          - RESOLUTION=1280x720
        restart: unless-stopped
