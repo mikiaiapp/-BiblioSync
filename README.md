@@ -1,27 +1,29 @@
-# BiblioSync - Sincronizador de Libros Electrónicos
+# BiblioSync - Organizador y Sincronizador de Libros Electrónicos (Web App)
 
-BiblioSync es una herramienta profesional diseñada para automatizar la organización de bibliotecas de libros electrónicos y su sincronización con **Calibre**. 
+BiblioSync es una aplicación web moderna diseñada para automatizar la organización de tu biblioteca de libros electrónicos y sincronizarla con **Calibre**.
 
-Escanea directorios de origen (carpetas de descarga, almacenamiento temporal, etc.) buscando libros nuevos que no se encuentren registrados en la biblioteca principal de Calibre, los copia a una carpeta destino unificada resolviendo colisiones de nombres de forma segura y genera informes interactivos en Excel y CSV de las operaciones realizadas.
+Escanea carpetas de origen (como tu directorio de descargas) buscando libros que no estén registrados en tu biblioteca de Calibre, los unifica en una carpeta de destino resolviendo de forma segura cualquier colisión de nombres (renombrado automático) y genera informes detallados en Excel y CSV de las operaciones.
 
-Además, cuenta con soporte completo de contenedorización Docker con interfaz web gráfica integrada (**noVNC**), ideal para despliegues en servidores NAS domésticos (Synology, Unraid, TrueNAS) gestionados a través de **Portainer**.
+Está desarrollada como una **aplicación web nativa** utilizando **FastAPI** en el backend y una interfaz moderna con diseño responsive en el frontend. Su contenedorización ligera es perfecta para desplegarse de manera directa en servidores NAS (Synology, Unraid, TrueNAS) a través de **Portainer**, sin necesidad de entornos gráficos virtuales ni noVNC.
 
 ---
 
 ## Características Principales
 
-1. **Indexación Diferencial:** Escanea y mantiene un índice local SQLite de tu biblioteca principal de Calibre para comparar a alta velocidad, detectando nuevas incorporaciones, modificaciones en disco y eliminaciones.
-2. **Escaneo Recursivo y Selectivo:** Busca libros en formatos de lectura admitidos (`.epub`, `.pdf`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.djvu`, `.cbz`, `.cbr`) en múltiples carpetas de origen, omitiendo ficheros temporales e imágenes (.jpg, .png, .opf, thumbs.db, etc.).
-3. **Estrategias de Comparación Flexibles:**
-   - **Nombre y Tamaño (Name & Size):** Comparación ultra rápida por nombre y tamaño exacto.
-   - **Contenido hash (SHA256):** Comprobación binaria exacta basada en el contenido físico del fichero.
-   - **Identificador (ISBN):** Extrae metadatos y compara los libros basándose en su ISBN.
-   - **Título y Autor (Title & Author):** Extrae metadatos internos del libro y normaliza la comparación por coincidencias de título y creador.
-4. **Copia Flat con Resolución de Colisiones:** Copia todos los libros identificados a una sola carpeta plana de destino. Si un libro ya existe en el destino, le asigna un sufijo incremental único (ej. `Libro (1).epub`, `Libro (2).epub`) de forma automática.
-5. **Reportes y Auditoría Automáticos:**
-   - **Informe en Excel (`informe_bibliosync.xlsx`):** Genera un libro multi-pestaña estilizado (Libros Copiados, Errores de Lectura/Copia y Resumen Estadístico general).
+1. **Interfaz Web Nativa:** Acceso directo desde tu navegador web a una interfaz moderna con modo oscuro, diseño de estilo *glassmorphism* (cristal esmerilado) y transiciones fluidas.
+2. **Explorador de Carpetas Integrado (Server-Side):** Permite navegar y seleccionar cualquier directorio de tu NAS directamente desde la interfaz web, de manera visual e intuitiva.
+3. **Indexación Diferencial:** Mantiene un índice local SQLite de tu biblioteca de Calibre. Detecta libros nuevos, modificados y eliminados a alta velocidad (orden $O(1)$) mediante consultas optimizadas.
+4. **Estrategias de Comparación Flexibles:**
+   - **Nombre y Tamaño (Name & Size):** Comparación rápida basada en nombre de archivo y peso en bytes.
+   - **Contenido hash (SHA256):** Comprobación binaria exacta basada en el hash de los archivos.
+   - **Identificador (ISBN):** Extrae metadatos y compara los libros basándose en el ISBN.
+   - **Título y Autor (Title & Author):** Extrae y normaliza los metadatos internos del libro para su comparación.
+5. **Copia Plana con Resolución de Colisiones:** Copia los libros nuevos a una carpeta unificada. Si el nombre coincide con un archivo existente, añade un sufijo incremental (ej. `Libro (1).epub`, `Libro (2).epub`).
+6. **Reportes y Auditoría Automáticos:**
+   - **Informe en Excel (`informe_bibliosync.xlsx`):** Genera un libro multi-pestaña estilizado (Libros Copiados, Errores y Resumen Estadístico general).
    - **Informes CSV:** Exporta los mismos datos a ficheros CSV individuales bajo la subcarpeta `informes_csv`.
-6. **Interfaz Gráfica Concurrente (Hilo-Segura):** Desarrollada con la estética moderna de CustomTkinter. Ejecuta todas las operaciones de indexación, escaneo y copia en hilos secundarios para que la interfaz nunca se congele.
+7. **Historial de Ejecuciones:** Almacena de forma persistente y muestra una tabla con las estadísticas de las últimas sincronizaciones realizadas.
+8. **Ejecución Asíncrona Hilo-Segura:** Los procesos pesados (escaneo, copia, indexación) se ejecutan en segundo plano en el servidor y transmiten el progreso en tiempo real mediante WebSockets, evitando que la interfaz se congele.
 
 ---
 
@@ -30,36 +32,31 @@ Además, cuenta con soporte completo de contenedorización Docker con interfaz w
 ```text
 .
 ├── src/
-│   ├── main.py                  # Punto de entrada de la aplicación
+│   ├── main.py                  # Servidor web FastAPI (Punto de entrada)
 │   ├── config/
 │   │   └── settings.py          # Gestor de configuraciones JSON
 │   ├── core/
 │   │   ├── scanner.py           # Escáner recursivo de directorios de origen
-│   │   ├── indexer.py           # Indexador incremental de biblioteca Calibre
-│   │   ├── comparer.py          # Estrategias de filtrado y comparación (Patrón Strategy)
-│   │   ├── copier.py            # Copiador físico y resolución de colisiones
+│   │   ├── indexer.py           # Indexador de biblioteca Calibre
+│   │   ├── comparer.py          # Estrategias de comparación (Strategy Pattern)
+│   │   ├── copier.py            # Copiador de archivos con renombrado seguro
 │   │   ├── metadata.py          # Extractor de metadatos (ebooklib, pypdf)
-│   │   └── hashing.py           # Cálculo de hash SHA256 de archivos
+│   │   └── hashing.py           # Cálculo de hash SHA256
 │   ├── database/
-│   │   ├── database.py          # Inicialización y gestión de conexiones SQLite (auto-close)
-│   │   └── models.py            # Modelos de datos (Dataclasses)
+│   │   ├── database.py          # Inicialización y gestión de conexiones SQLite
+│   │   └── models.py            # Modelos de datos
 │   ├── export/
-│   │   ├── excel_export.py      # Exportador estilizado de informe de Excel (openpyxl)
+│   │   ├── excel_export.py      # Exportador estilizado de informe Excel (openpyxl)
 │   │   └── csv_export.py        # Exportador a archivos CSV separados
-│   ├── gui/
-│   │   ├── main_window.py       # Ventana principal del cuadro de mando (CustomTkinter)
-│   │   ├── settings_window.py   # Ventana de configuración avanzada (Stub)
-│   │   └── progress_dialog.py   # Diálogo modal de progreso en tiempo real
-│   └── utils/
-│       ├── logger.py            # Logger del sistema (consola de GUI y ficheros .log)
-│       └── helpers.py           # Funciones de formateo y rutas únicas
+│   └── web/                     # Interfaz gráfica web (Dashboard)
+│       ├── index.html           # Estructura del panel de control
+│       ├── style.css            # Estilos CSS premium modo oscuro y responsivo
+│       └── app.js               # Cliente JS (WebSockets, API, explorador de carpetas)
 ├── tests/
 │   └── test_sync.py             # Suite de pruebas unitarias automatizadas
-├── Dockerfile                   # Imagen de docker con Xvfb + noVNC incorporado
+├── Dockerfile                   # Imagen de docker optimizada y ultraligera
 ├── docker-compose.yml           # Archivo compose para orquestar la app
-├── supervisord.conf             # Configurador de supervisord para arrancar el servidor VNC
 ├── requirements.txt             # Dependencias del proyecto
-├── build.bat                    # Script para compilar el ejecutable local en Windows
 └── README.md                    # Documentación del proyecto
 ```
 
@@ -80,31 +77,25 @@ Tener instalado Python 3.11, 3.12 o 3.13.
    ```bash
    pip install -r requirements.txt
    ```
-3. Ejecuta la aplicación:
+3. Ejecuta la aplicación como un módulo:
    ```bash
-   python src/main.py
+   python -m src.main
    ```
-
-*(Opcional) Si quieres compilar un ejecutable independiente de Windows (`dist/BiblioSync.exe`), ejecuta en tu consola:*
-```bash
-build.bat
-```
+4. Abre tu navegador e ingresa a: `http://localhost:6080`
 
 ---
 
 ## Despliegue en Portainer (NAS)
 
-El contenedor Docker de BiblioSync viene preconfigurado con un servidor X11 virtual (Xvfb), un gestor de ventanas ligero (Fluxbox), un servidor VNC (x11vnc) y un cliente web noVNC. Esto permite acceder a la interfaz de usuario directamente desde **cualquier navegador web**, sin necesidad de instalar clientes en tu ordenador.
-
 ### 1. Carpetas y Volúmenes a crear en tu NAS
-Para un funcionamiento idóneo, configurarás los siguientes tres volúmenes en el contenedor:
+Para un funcionamiento correcto y acotado, configurarás los siguientes tres volúmenes en el contenedor:
 
 * **`/volume1/docker/bibliosync/data` (Mapeado a `/data`)**: Almacenará la configuración de la app (`settings.json`) y la base de datos local SQLite (`bibliosync.db`) para que persistan entre reinicios del contenedor.
 * **`/volume1/docker/calibreweb` (Mapeado a `/calibreweb`)**: La ubicación de tu biblioteca de Calibre (por ejemplo, conteniendo la subcarpeta `Biblioteca` con el archivo `metadata.db` de Calibre).
-* **`/volume1/homes/XXXX/Descargas` (Mapeado a `/descargas`)**: Tu directorio de descargas en el NAS (donde `XXXX` es tu nombre de usuario en el NAS; por ejemplo, `/volume1/homes/MIKI/Descargas`). Esta carpeta se utilizará tanto para ubicar los libros a analizar (orígenes) como para guardar los libros seleccionados para importar (destino). Podrás navegar por sus subcarpetas de forma dinámica desde el selector de la app.
+* **`/volume1/homes/MIKI/Descargas` (Mapeado a `/descargas`)**: Tu directorio de descargas en el NAS (donde `MIKI` es tu nombre de usuario en el NAS, sustitúyelo si es necesario). Esta carpeta se utilizará tanto para ubicar los libros a analizar (orígenes) como para guardar los libros seleccionados para importar (destino).
 
 ### 2. Variables de Entorno
-* **`RESOLUTION`** *(Opcional)*: Define la resolución de pantalla de la interfaz gráfica en el navegador. Por defecto es `1280x720`. Ejemplo: `RESOLUTION=1440x900`.
+* **`RESOLUTION`** *(Opcional)*: No aplica en este modo web nativo. El diseño web es responsivo y se adapta de forma automática al tamaño de pantalla de tu navegador o dispositivo.
 
 ---
 
@@ -120,10 +111,8 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
    - **Repository URL:** `https://github.com/mikiaiapp/-BiblioSync`
    - **Repository reference:** `refs/heads/main`
    - **Compose path:** `docker-compose.yml`
-6. En la sección **Environment variables**, añade si lo deseas la variable de resolución:
-   - Nombre: `RESOLUTION`, Valor: `1280x720` (o la que prefieras).
-7. **Modificar los mapeos de volúmenes (Binds):**
-   Edita la configuración para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml` (recuerda cambiar `XXXX` por tu usuario de NAS):
+6. **Modificar los mapeos de volúmenes (Binds):**
+   Edita la configuración para adaptar los directorios físicos de tu NAS a las rutas virtuales del contenedor indicadas en el `docker-compose.yml` (recuerda cambiar `MIKI` por tu usuario de NAS si es diferente):
    
    ```yaml
    services:
@@ -137,13 +126,11 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
          - /volume1/docker/bibliosync/data:/data
          # Acceso a la biblioteca de Calibre (para indexar metadata.db)
          - /volume1/docker/calibreweb:/calibreweb
-         # Carpeta de descargas (cambia XXXX por tu usuario de NAS, ej: MIKI)
-         - /volume1/homes/XXXX/Descargas:/descargas
-       environment:
-         - RESOLUTION=1280x720
+         # Carpeta de descargas
+         - /volume1/homes/MIKI/Descargas:/descargas
        restart: unless-stopped
    ```
-8. Pulsa en **Deploy the stack**. Portainer descargará el repositorio, compilará la imagen de Docker a partir del `Dockerfile` e iniciará el contenedor automáticamente.
+7. Pulsa en **Deploy the stack**. Portainer descargará el repositorio, compilará la imagen de Docker a partir del `Dockerfile` e iniciará el contenedor automáticamente en pocos segundos debido a su arquitectura web ultraligera.
 
 ---
 
@@ -151,15 +138,14 @@ Puedes desplegar BiblioSync en Portainer fácilmente enlazando directamente este
 
 Una vez que el Stack se haya desplegado y muestre el estado **Running**:
 
-1. Abre tu navegador web preferido.
-2. Navega a la siguiente dirección:
+1. Abre tu navegador web e ingresa a:
    ```text
    http://<IP_DE_TU_NAS>:6080
    ```
-3. Se abrirá la consola de noVNC mostrando la aplicación **BiblioSync** lista para usar.
-4. **Configura las rutas dinámicamente desde la interfaz:**
-   - Introduce `/calibreweb/Biblioteca` (o la subcarpeta donde tengas tu biblioteca principal de Calibre) en el campo **Biblioteca Calibre**.
-   - Introduce `/descargas/importar` (o cualquier subcarpeta que desees usar para recibir los libros limpios) en el campo **Carpeta Destino**.
-   - Haz clic en **Añadir Carpeta** y selecciona `/descargas/carpetas_a_analizar` (utilizando el selector para elegir cualquier directorio de descargas al vuelo).
-   - Selecciona el método de comparación deseado y pulsa en **Analizar** y después en **Copiar Libros**.
-   - Toda la configuración de rutas y el historial de sincronizaciones se guardará automáticamente en tu volumen persistente `/data`.
+2. Se abrirá directamente el cuadro de mando de **BiblioSync**:
+   - Pulsa en **Examinar** al lado de *Biblioteca Calibre* y selecciona `/calibreweb/Biblioteca` en el explorador de carpetas modal.
+   - Pulsa en **Examinar** al lado de *Carpeta Destino* y selecciona `/descargas/importar` (o la subcarpeta que prefieras usar para recibir los libros limpios).
+   - Haz clic en **Añadir Carpeta** y añade `/descargas/carpetas_a_analizar` para escanear tus nuevos libros descargados.
+   - Elige el método de comparación deseado en la lista desplegable.
+   - Pulsa en **Analizar** y verás la barra de progreso y la consola de logs en vivo.
+   - Pulsa en **Copiar Libros** para organizar tu catálogo de lectura automáticamente y generar los reportes de importación.

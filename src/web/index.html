@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiblioSync - Panel de Control</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="icon">📚</span>
+                <div>
+                    <h1>BiblioSync</h1>
+                    <p class="subtitle">Sincronizador de Libros Electrónicos para Calibre</p>
+                </div>
+            </div>
+            <div class="status-indicator" id="connection-status">
+                <span class="indicator-dot"></span>
+                <span class="status-text">Conectando...</span>
+            </div>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Left Column: Config & Actions -->
+            <div class="column-left">
+                <!-- Rutas de Sincronización -->
+                <section class="card config-card">
+                    <h2>Rutas de Sincronización</h2>
+                    <div class="input-group">
+                        <label for="lib-path">Biblioteca Calibre:</label>
+                        <div class="input-with-button">
+                            <input type="text" id="lib-path" placeholder="Ej: /calibreweb/Biblioteca">
+                            <button class="btn-browse" onclick="openFolderBrowser('lib-path')">Examinar...</button>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="dest-path">Carpeta Destino:</label>
+                        <div class="input-with-button">
+                            <input type="text" id="dest-path" placeholder="Ej: /descargas/importar">
+                            <button class="btn-browse" onclick="openFolderBrowser('dest-path')">Examinar...</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Carpetas a Analizar -->
+                <section class="card scan-folders-card">
+                    <div class="card-header">
+                        <h2>Carpetas de Origen a Analizar</h2>
+                        <button class="btn-primary btn-sm" onclick="openFolderBrowser('add-scan-folder')">Añadir Carpeta</button>
+                    </div>
+                    <div class="scrollable-list" id="scan-folders-list">
+                        <!-- Carpetas dinámicas -->
+                    </div>
+                </section>
+
+                <!-- Acciones -->
+                <section class="card actions-card">
+                    <h2>Configuración y Acciones</h2>
+                    <div class="input-group inline-group">
+                        <label for="strategy-select">Método de Comparación:</label>
+                        <select id="strategy-select">
+                            <option value="Name & Size">Nombre y Tamaño</option>
+                            <option value="ISBN">ISBN</option>
+                            <option value="Title & Author">Título y Autor</option>
+                            <option value="SHA256 Hash">SHA256 Hash</option>
+                        </select>
+                    </div>
+
+                    <div class="buttons-row">
+                        <button id="btn-analyze" class="btn-action btn-blue" onclick="triggerAnalyze()">Analizar</button>
+                        <button id="btn-copy" class="btn-action btn-green" onclick="triggerCopy()">Copiar Libros</button>
+                    </div>
+
+                    <!-- Progress area -->
+                    <div class="progress-container">
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span id="progress-text">Listo</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Live Logs & History -->
+            <div class="column-right">
+                <!-- Consola de logs en vivo -->
+                <section class="card logs-card">
+                    <h2>Registro de Actividad (Log en Vivo)</h2>
+                    <div class="log-console-wrapper">
+                        <pre id="log-console">Cargando consola...</pre>
+                    </div>
+                </section>
+
+                <!-- Historial -->
+                <section class="card history-card">
+                    <h2>Historial de Sincronizaciones</h2>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Copiados</th>
+                                    <th>Errores</th>
+                                    <th>Detalles</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Folder Browser Modal -->
+    <div id="folder-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Explorador de Carpetas</h3>
+                <button class="btn-close" onclick="closeFolderBrowser()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-path-bar">
+                    <span class="path-label">Ruta actual:</span>
+                    <input type="text" id="modal-path-input" readonly>
+                </div>
+                <div class="folder-list-container">
+                    <div class="folder-item parent-dir" id="modal-parent-item" onclick="navigateFolder('parent')">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">.. (Subir nivel)</span>
+                    </div>
+                    <div id="modal-folder-items">
+                        <!-- Carpetas dinámicas -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeFolderBrowser()">Cancelar</button>
+                <button class="btn-confirm" onclick="confirmFolderSelection()">Seleccionar Carpeta</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
