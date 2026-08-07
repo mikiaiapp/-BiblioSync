@@ -20,5 +20,5 @@ COPY src/ /app/src/
 # Expose web server port
 EXPOSE 6080
 
-# Start FastAPI server directly
-CMD ["python", "src/main.py"]
+# Start FastAPI server directly as a module
+CMD ["python", "-m", "src.main"]
