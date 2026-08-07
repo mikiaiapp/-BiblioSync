@@ -9,8 +9,8 @@ services:
       - /volume1/docker/bibliosync/data:/data
       # Acceso a la biblioteca de Calibre (para indexar metadata.db)
       - /volume1/docker/calibreweb:/calibreweb
-      # Carpeta para descargas (reemplaza XXXX por tu nombre de usuario del NAS)
-      - /volume1/homes/XXXX/Descargas:/descargas
+      # Carpeta para descargas
+      - /volume1/homes/MIKI/Descargas:/descargas
     environment:
       - RESOLUTION=1280x720
     restart: unless-stopped
