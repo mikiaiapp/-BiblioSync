@@ -80,3 +80,7 @@ def setup_logger():
     logger.addHandler(gui_handler)
     
     logger.info("Logger system initialized.")
+
+# Initialize logging system automatically on module import
+setup_logger()
+

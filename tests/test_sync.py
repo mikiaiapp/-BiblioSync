@@ -14,7 +14,7 @@ from src.database.database import db_manager
 from src.database.models import Book
 from src.core.indexer import LibraryIndexer
 from src.core.scanner import LibraryScanner
-from src.core.comparer import BookComparer, NameSizeStrategy, SHA256Strategy, ISBNStrategy, AuthorTitleStrategy
+from src.core.comparer import BookComparer, NameSizeStrategy, NameOnlyStrategy, SHA256Strategy, ISBNStrategy, AuthorTitleStrategy
 from src.core.copier import FileCopier
 from src.export.excel_export import generate_excel_report
 from src.export.csv_export import generate_csv_report
@@ -123,6 +123,68 @@ class TestBiblioSync(unittest.TestCase):
         # "Book 1 (100).epub" exists in calibre DB with same size, so only "New Book (200).epub" is new
         self.assertEqual(len(new_books), 1)
         self.assertEqual(new_books[0].file_name, "New Book (200).epub")
+
+    def test_name_only_comparison(self):
+        # 1. Index calibre
+        indexer = LibraryIndexer(str(self.calibre_dir))
+        indexer.sync_index()
+        
+        # 2. Add books to source folders
+        # - "Book 1 (100).epub" exists but we change size in source folder -> NameSizeStrategy would treat as new, NameOnlyStrategy as duplicate
+        self._create_dummy_file(self.source_dir / "Folder A" / "Book 1 (100).epub", "Content of book 1 - changed size")
+        # - "New Book (200).epub" is a new book
+        self._create_dummy_file(self.source_dir / "Folder B" / "New Book (200).epub", "Content of new book")
+        
+        # 3. Scan
+        scanner = LibraryScanner([str(self.source_dir)])
+        scanned_books = scanner.scan()
+        
+        # 4. Compare using Name Only strategy
+        comparer = BookComparer(NameOnlyStrategy())
+        new_books = comparer.get_new_books(scanned_books)
+        
+        # We expect only "New Book (200).epub" to be new. "Book 1 (100).epub" should be matched by name despite size differences.
+        self.assertEqual(len(new_books), 1)
+        self.assertEqual(new_books[0].file_name, "New Book (200).epub")
+
+    def test_author_title_normalized_comparison(self):
+        # 1. Index calibre library
+        # Mock book 1 in Calibre was: "Book 1 (100).epub"
+        # We manually update its metadata in the db to have:
+        # title = "Don Quijote de la Mancha"
+        # author = "Cervantes, Miguel de"
+        indexer = LibraryIndexer(str(self.calibre_dir))
+        indexer.sync_index()
+        
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE books SET title = ?, author = ? WHERE file_name LIKE ?",
+                ("Don Quijote de la Mancha", "Cervantes, Miguel de", "%Book 1%")
+            )
+            conn.commit()
+
+        # 2. Add books to source folders:
+        # - "Miguel de Cervantes - Don Quijote de la Mancha.epub" (matches Title & Author from filename!)
+        # - "Book 2 (101).pdf" (exists, but has different casing/name, matches via filename fallback/Name Only)
+        # - "Some Title - Some Author.epub" (new book, doesn't exist)
+        self._create_dummy_file(self.source_dir / "Miguel de Cervantes - Don Quijote de la Mancha.epub", "Content of Quijote")
+        self._create_dummy_file(self.source_dir / "Book 2 (101).pdf", "Content of book 2 - changed size")
+        self._create_dummy_file(self.source_dir / "Some Title - Some Author.epub", "Content of some book")
+
+        # 3. Scan source folders
+        scanner = LibraryScanner([str(self.source_dir)])
+        scanned_books = scanner.scan()
+
+        # 4. Compare using Title & Author strategy
+        comparer = BookComparer(AuthorTitleStrategy())
+        new_books = comparer.get_new_books(scanned_books)
+
+        # "Miguel de Cervantes - Don Quijote de la Mancha.epub" matches "Don Quijote de la Mancha" by "Cervantes, Miguel de" (transposed, normalized, ignored accents)
+        # "Book 2 (101).pdf" matches "Book 2 (101).pdf" via filename fallback (ignored size)
+        # Only "Some Title - Some Author.epub" is treated as new.
+        self.assertEqual(len(new_books), 1)
+        self.assertEqual(new_books[0].file_name, "Some Title - Some Author.epub")
 
     def test_copier_and_renaming_collision(self):
         # Create books to copy

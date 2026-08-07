@@ -17,7 +17,7 @@ from src.gui.progress_dialog import ProgressDialog
 # Core imports
 from src.core.indexer import LibraryIndexer
 from src.core.scanner import LibraryScanner
-from src.core.comparer import BookComparer, NameSizeStrategy, ISBNStrategy, AuthorTitleStrategy, SHA256Strategy
+from src.core.comparer import BookComparer, NameSizeStrategy, NameOnlyStrategy, ISBNStrategy, AuthorTitleStrategy, SHA256Strategy
 from src.core.copier import FileCopier
 from src.export.excel_export import generate_excel_report
 from src.export.csv_export import generate_csv_report
@@ -157,7 +157,7 @@ class MainWindow(ctk.CTk):
 
         self.strategy_menu = ctk.CTkOptionMenu(
             actions_frame, 
-            values=["Name & Size", "ISBN", "Title & Author", "SHA256 Hash"],
+            values=["Name & Size", "Name Only", "ISBN", "Title & Author", "SHA256 Hash"],
             command=self._save_comparison_strategy
         )
         self.strategy_menu.set(settings.last_comparison_method)
@@ -361,6 +361,8 @@ class MainWindow(ctk.CTk):
                     strategy = AuthorTitleStrategy()
                 elif strategy_choice == "SHA256 Hash":
                     strategy = SHA256Strategy()
+                elif strategy_choice == "Name Only":
+                    strategy = NameOnlyStrategy()
                 else:
                     strategy = NameSizeStrategy()
                 

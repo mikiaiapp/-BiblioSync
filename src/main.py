@@ -25,7 +25,7 @@ from src.database.database import db_manager
 from src.database.models import Book
 from src.core.indexer import LibraryIndexer
 from src.core.scanner import LibraryScanner
-from src.core.comparer import BookComparer, NameSizeStrategy, ISBNStrategy, AuthorTitleStrategy, SHA256Strategy
+from src.core.comparer import BookComparer, NameSizeStrategy, NameOnlyStrategy, ISBNStrategy, AuthorTitleStrategy, SHA256Strategy
 from src.core.copier import FileCopier
 from src.export.excel_export import generate_excel_report
 from src.export.csv_export import generate_csv_report
@@ -248,6 +248,8 @@ def run_analysis_task(progress_callback):
             strategy = AuthorTitleStrategy()
         elif strategy_choice == "SHA256 Hash":
             strategy = SHA256Strategy()
+        elif strategy_choice == "Name Only":
+            strategy = NameOnlyStrategy()
         else:
             strategy = NameSizeStrategy()
             

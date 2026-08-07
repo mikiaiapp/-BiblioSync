@@ -65,6 +65,8 @@ class LibraryIndexer:
             
         disk_files = self._scan_disk_library()
         logger.info(f"Found {len(disk_files)} ebooks on disk.")
+        if len(disk_files) == 0:
+            logger.warning("No se encontraron libros en la biblioteca de Calibre. Verifique que la ruta de la biblioteca sea correcta y que contenga libros en formatos soportados (epub, pdf, mobi, etc.).")
 
         # Compute differences
         disk_paths = set(disk_files.keys())
@@ -169,9 +171,9 @@ class LibraryIndexer:
             for entry in os.scandir(directory):
                 try:
                     entry_path = Path(entry.path)
-                    if entry.is_dir(follow_symlinks=False):
+                    if entry.is_dir(follow_symlinks=True):
                         self._scan_dir(entry_path, disk_map)
-                    elif entry.is_file(follow_symlinks=False):
+                    elif entry.is_file(follow_symlinks=True):
                         filename_lower = entry.name.lower()
                         if filename_lower in IGNORED_FILENAMES:
                             continue

@@ -52,6 +52,8 @@ class LibraryScanner:
             logger.info(f"Completed scanning {root_path}. Found {len(books_in_path)} ebook(s).")
 
         logger.info(f"Scanning completed. Total ebooks found: {len(found_books)}")
+        if len(found_books) == 0:
+            logger.warning("No se encontraron libros en las carpetas de origen. Verifique que las rutas sean correctas y que contengan archivos de libros soportados.")
         return found_books
 
     def _scan_directory_recursive(self, directory: Path) -> List[Book]:
@@ -63,11 +65,11 @@ class LibraryScanner:
                 try:
                     entry_path = Path(entry.path)
                     
-                    if entry.is_dir(follow_symlinks=False):
+                    if entry.is_dir(follow_symlinks=True):
                         # Recursive call
                         books.extend(self._scan_directory_recursive(entry_path))
                         
-                    elif entry.is_file(follow_symlinks=False):
+                    elif entry.is_file(follow_symlinks=True):
                         filename_lower = entry.name.lower()
                         
                         # 1. Skip system files
