@@ -60,8 +60,9 @@ class MetadataExtractor:
         """Extracts metadata from EPUB using ebooklib."""
         result = {'title': None, 'author': None, 'isbn': None}
         try:
-            # read_epub can raise standard exceptions on corrupt files
-            book = epub.read_epub(str(file_path), read_geometry=False)
+            # read_epub can raise standard exceptions on corrupt files.
+            # We call it without read_geometry=False because older ebooklib versions do not support it.
+            book = epub.read_epub(str(file_path))
             
             # Title
             titles = book.get_metadata('DC', 'title')

@@ -15,18 +15,24 @@ def generate_excel_report(
     output_path: Path,
     copied_books: List[Tuple[Book, str]],
     failed_books: List[Tuple[Book, str]],
+    confirmed_duplicates: List[Tuple[Book, Book]],
+    doubtful_duplicates: List[Tuple[Book, Book]],
     summary_data: Dict[str, Any]
 ) -> None:
     """
-    Creates an Excel spreadsheet containing three sheets:
+    Creates an Excel spreadsheet containing five sheets:
     - Sheet 1: Libros Copiados (Successfully copied books)
     - Sheet 2: Errores (Copy errors and failures)
-    - Sheet 3: Resumen (Sync run statistics summary)
+    - Sheet 3: Duplicados Confirmados (All fields match exactly)
+    - Sheet 4: Duplicados Dudosos (Criteria matched but size, format or ISBN differ)
+    - Sheet 5: Resumen (Sync run statistics summary)
     
     Args:
         output_path (Path): Target path to save the Excel file.
         copied_books: List of tuples (Book, destination_path)
         failed_books: List of tuples (Book, error_message)
+        confirmed_duplicates: List of tuples (scanned Book, existing Book)
+        doubtful_duplicates: List of tuples (scanned Book, existing Book)
         summary_data: Dict containing execution summary metrics.
     """
     logger.info(f"Generating Excel report at {output_path}...")
@@ -42,6 +48,7 @@ def generate_excel_report(
     header_font = Font(name=font_family, size=11, bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid") # Dark Blue
     error_header_fill = PatternFill(start_color="A61C1C", end_color="A61C1C", fill_type="solid") # Dark Red
+    doubtful_header_fill = PatternFill(start_color="D66000", end_color="D66000", fill_type="solid") # Orange
     
     center_align = Alignment(horizontal="center", vertical="center")
     left_align = Alignment(horizontal="left", vertical="center")
@@ -95,7 +102,63 @@ def generate_excel_report(
         cell.fill = error_header_fill
         cell.alignment = center_align
 
-    # 3. Sheet "Resumen"
+    # Headers for Duplicate Sheets
+    headers_dup = [
+        "Título (Origen)", "Autor (Origen)", "Tamaño (Origen)", "ISBN (Origen)", "Ruta (Origen)",
+        "Título (Calibre)", "Autor (Calibre)", "Tamaño (Calibre)", "ISBN (Calibre)", "Ruta en Calibre"
+    ]
+
+    # 3. Sheet "Duplicados Confirmados"
+    ws_confirmed = wb.create_sheet(title="Duplicados Confirmados")
+    ws_confirmed.append(headers_dup)
+    
+    for scanned, existing in confirmed_duplicates:
+        ws_confirmed.append([
+            scanned.title or scanned.file_name,
+            scanned.author or "",
+            scanned.file_size,
+            scanned.isbn or "",
+            scanned.file_path,
+            existing.title or existing.file_name,
+            existing.author or "",
+            existing.file_size,
+            existing.isbn or "",
+            existing.file_path
+        ])
+        
+    # Style Sheet 3 Headers
+    for col_num in range(1, len(headers_dup) + 1):
+        cell = ws_confirmed.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center_align
+
+    # 4. Sheet "Duplicados Dudosos"
+    ws_doubtful = wb.create_sheet(title="Duplicados Dudosos")
+    ws_doubtful.append(headers_dup)
+    
+    for scanned, existing in doubtful_duplicates:
+        ws_doubtful.append([
+            scanned.title or scanned.file_name,
+            scanned.author or "",
+            scanned.file_size,
+            scanned.isbn or "",
+            scanned.file_path,
+            existing.title or existing.file_name,
+            existing.author or "",
+            existing.file_size,
+            existing.isbn or "",
+            existing.file_path
+        ])
+        
+    # Style Sheet 4 Headers
+    for col_num in range(1, len(headers_dup) + 1):
+        cell = ws_doubtful.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = doubtful_header_fill
+        cell.alignment = center_align
+
+    # 5. Sheet "Resumen"
     ws_summary = wb.create_sheet(title="Resumen")
     headers_summary = ["Métrica", "Valor"]
     ws_summary.append(headers_summary)
@@ -103,7 +166,7 @@ def generate_excel_report(
     for key, val in summary_data.items():
         ws_summary.append([key, val])
         
-    # Style Sheet 3 Headers
+    # Style Sheet 5 Headers
     for col_num in range(1, len(headers_summary) + 1):
         cell = ws_summary.cell(row=1, column=col_num)
         cell.font = header_font
@@ -111,7 +174,7 @@ def generate_excel_report(
         cell.alignment = center_align
 
     # Apply general styles & auto-fit columns for all sheets
-    for ws in [ws_copied, ws_errors, ws_summary]:
+    for ws in [ws_copied, ws_errors, ws_confirmed, ws_doubtful, ws_summary]:
         ws.row_dimensions[1].height = 24  # Give header row extra breathing room
         
         # Style all data rows
@@ -131,6 +194,14 @@ def generate_excel_report(
                     elif col_idx == 5:  # File Size
                         cell.alignment = right_align
                         cell.number_format = '#,##0'  # Format as integer with thousands separator
+                elif ws.title in ("Duplicados Confirmados", "Duplicados Dudosos"):
+                    if col_idx in (1, 2, 5, 6, 7, 10):  # Titles, authors, paths
+                        cell.alignment = left_align
+                    elif col_idx in (3, 8):  # Sizes
+                        cell.alignment = right_align
+                        cell.number_format = '#,##0'
+                    elif col_idx in (4, 9):  # ISBNs
+                        cell.alignment = center_align
                 elif ws.title == "Errores":
                     cell.alignment = left_align
                 elif ws.title == "Resumen":

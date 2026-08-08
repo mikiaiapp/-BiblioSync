@@ -34,6 +34,8 @@ from src.utils.logger import logger
 
 # Store the global active books list found in the last analysis
 global_new_books: List[Book] = []
+global_confirmed_duplicates: List[Tuple[Book, Book]] = []
+global_doubtful_duplicates: List[Tuple[Book, Book]] = []
 global_new_books_lock = threading.Lock()
 
 # Custom logging handler to stream logs over WebSockets
@@ -222,9 +224,8 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         # Detach log handler on websocket disconnect to prevent memory leak
         logging.getLogger().removeHandler(log_handler)
-
 def run_analysis_task(progress_callback):
-    global global_new_books
+    global global_new_books, global_confirmed_duplicates, global_doubtful_duplicates
     try:
         progress_callback(0.05, "Iniciando análisis...")
         settings.load()
@@ -254,35 +255,71 @@ def run_analysis_task(progress_callback):
             strategy = NameSizeStrategy()
             
         comparer = BookComparer(strategy)
-        new_books = comparer.get_new_books(scanned_books)
+        new_books, duplicates = comparer.compare_books(scanned_books)
         
+        # Categorize duplicates
+        from src.core.comparer import is_exact_match
+        confirmed = []
+        doubtful = []
+        for scanned, existing in duplicates:
+            if is_exact_match(scanned, existing):
+                confirmed.append((scanned, existing))
+            else:
+                doubtful.append((scanned, existing))
+                
         with global_new_books_lock:
             global_new_books = new_books
+            global_confirmed_duplicates = confirmed
+            global_doubtful_duplicates = doubtful
             
         progress_callback(1.0, "Análisis completado.")
-        logger.info(f"Análisis finalizado: se han detectado {len(new_books)} libros nuevos de {len(scanned_books)} escaneados.")
+        logger.info(f"Análisis finalizado: se han detectado {len(new_books)} libros nuevos y {len(duplicates)} duplicados ({len(confirmed)} confirmados, {len(doubtful)} dudosos) de {len(scanned_books)} escaneados.")
         
     except Exception as e:
         logger.error(f"Error durante el análisis: {e}")
         progress_callback(1.0, f"Error: {e}")
 
 def run_copy_task(progress_callback):
-    global global_new_books
+    global global_new_books, global_confirmed_duplicates, global_doubtful_duplicates
     try:
         progress_callback(0.05, "Iniciando copia de archivos...")
         settings.load()
         
         with global_new_books_lock:
             books_to_copy = list(global_new_books)
+            confirmed_dups = list(global_confirmed_duplicates)
+            doubtful_dups = list(global_doubtful_duplicates)
             
-        if not books_to_copy:
-            logger.warning("No hay libros nuevos para copiar. Realice un análisis primero.")
+        if not books_to_copy and not confirmed_dups and not doubtful_dups:
+            logger.warning("No hay libros nuevos para copiar ni duplicados detectados. Realice un análisis primero.")
             progress_callback(1.0, "No hay libros nuevos para copiar.")
             return
 
         dest_path = settings.destination_folder
-        copier = FileCopier(dest_path)
-        copied, failed = copier.copy_books(books_to_copy, progress_callback=progress_callback)
+        copied = []
+        failed = []
+        
+        if books_to_copy:
+            copier = FileCopier(dest_path)
+            copied, failed = copier.copy_books(books_to_copy, progress_callback=progress_callback)
+        else:
+            logger.info("No hay libros nuevos para copiar.")
+            
+        if doubtful_dups:
+            logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'dudosos'...")
+            doubtful_books = [scanned for scanned, _ in doubtful_dups]
+            
+            def progress_callback_doubtful(val, text):
+                if progress_callback:
+                    progress_callback(0.5 + 0.3 * val, f"[Dudosos] {text}")
+                    
+            copier_doubtful = FileCopier(str(Path(dest_path) / "dudosos"))
+            copied_doubtful, failed_doubtful = copier_doubtful.copy_books(
+                doubtful_books, 
+                progress_callback=progress_callback_doubtful
+            )
+            copied.extend(copied_doubtful)
+            failed.extend(failed_doubtful)
         
         # 2. Report generation
         progress_callback(0.9, "Generando informes...")
@@ -291,19 +328,21 @@ def run_copy_task(progress_callback):
         summary_data = {
             "Fecha de Sincronización": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Método de Comparación": settings.last_comparison_method,
-            "Libros Analizados": len(books_to_copy),
+            "Libros Analizados": len(books_to_copy) + len(confirmed_dups) + len(doubtful_dups),
             "Libros Copiados con Éxito": len(copied),
             "Errores de Copia": len(failed),
+            "Duplicados Confirmados": len(confirmed_dups),
+            "Duplicados Dudosos": len(doubtful_dups),
             "Tamaño Total Copiado": format_size(total_bytes)
         }
         
         # Generate Excel
         excel_report_path = Path(dest_path) / "informe_bibliosync.xlsx"
-        generate_excel_report(excel_report_path, copied, failed, summary_data)
+        generate_excel_report(excel_report_path, copied, failed, confirmed_dups, doubtful_dups, summary_data)
         
         # Generate CSV
         csv_report_dir = Path(dest_path) / "informes_csv"
-        generate_csv_report(csv_report_dir, copied, failed, summary_data)
+        generate_csv_report(csv_report_dir, copied, failed, confirmed_dups, doubtful_dups, summary_data)
         
         # Write history record to DB
         try:
@@ -316,7 +355,7 @@ def run_copy_task(progress_callback):
                     summary_data["Fecha de Sincronización"],
                     len(copied),
                     len(failed),
-                    f"Copias: {len(copied)}, Errores: {len(failed)}"
+                    f"Copias: {len(copied)}, Duplicados: {len(confirmed_dups) + len(doubtful_dups)}"
                 ))
                 conn.commit()
         except Exception as db_err:
@@ -330,10 +369,12 @@ def run_copy_task(progress_callback):
         # Clear list on successful copy completion
         with global_new_books_lock:
             global_new_books = []
+            global_confirmed_duplicates = []
+            global_doubtful_duplicates = []
             
     except Exception as e:
         logger.error(f"Error durante el proceso de copia: {e}")
-        progress_callback(1.0, f"Error: {e}")
+        progress_callback(1.0, f"Error: {e}")"Error: {e}")
 
 # Mount static files and redirect homepage to index.html
 web_dir = Path(__file__).parent / "web"

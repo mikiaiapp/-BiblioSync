@@ -367,13 +367,29 @@ class MainWindow(ctk.CTk):
                     strategy = NameSizeStrategy()
                 
                 comparer = BookComparer(strategy)
-                self.new_books = comparer.get_new_books(scanned_books)
+                new_books, duplicates = comparer.compare_books(scanned_books)
+                
+                # Categorize duplicates
+                from src.core.comparer import is_exact_match
+                confirmed = []
+                doubtful = []
+                for scanned, existing in duplicates:
+                    if is_exact_match(scanned, existing):
+                        confirmed.append((scanned, existing))
+                    else:
+                        doubtful.append((scanned, existing))
+                
+                self.new_books = new_books
+                self.confirmed_dups = confirmed
+                self.doubtful_dups = doubtful
                 
                 safe_update(1.0, "Análisis completado.")
-                logger.info(f"Análisis finalizado: se han encontrado {len(self.new_books)} libros nuevos de {len(scanned_books)} escaneados.")
+                logger.info(f"Análisis finalizado: se han detectado {len(new_books)} libros nuevos y {len(duplicates)} duplicados ({len(confirmed)} confirmados, {len(doubtful)} dudosos) de {len(scanned_books)} escaneados.")
             except Exception as e:
                 logger.error(f"Error durante el análisis: {e}")
                 self.new_books = []
+                self.confirmed_dups = []
+                self.doubtful_dups = []
             finally:
                 self.after(0, lambda: self._cleanup_after_analysis(dialog))
 
@@ -393,8 +409,11 @@ class MainWindow(ctk.CTk):
             logger.error("Debe configurar la ruta de la carpeta de destino.")
             return
 
-        if not hasattr(self, "new_books") or not self.new_books:
-            logger.warning("No hay libros nuevos detectados para copiar. Ejecute un análisis primero.")
+        new_books = getattr(self, "new_books", [])
+        confirmed_dups = getattr(self, "confirmed_dups", [])
+        doubtful_dups = getattr(self, "doubtful_dups", [])
+        if not new_books and not confirmed_dups and not doubtful_dups:
+            logger.warning("No hay libros nuevos detectados para copiar ni duplicados. Ejecute un análisis primero.")
             return
 
         logger.info("Iniciando copia de nuevos libros...")
@@ -410,30 +429,56 @@ class MainWindow(ctk.CTk):
         def run_copy_thread():
             try:
                 safe_update(0.0, "Preparando copia...")
-                copier = FileCopier(dest_path)
-                copied, failed = copier.copy_books(self.new_books, progress_callback=safe_update)
+                copied = []
+                failed = []
+                if self.new_books:
+                    copier = FileCopier(dest_path)
+                    copied, failed = copier.copy_books(self.new_books, progress_callback=safe_update)
+                
+                confirmed_dups = getattr(self, "confirmed_dups", [])
+                doubtful_dups = getattr(self, "doubtful_dups", [])
+                
+                if doubtful_dups:
+                    logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'dudosos'...")
+                    doubtful_books = [scanned for scanned, _ in doubtful_dups]
+                    
+                    def safe_update_doubtful(val, text):
+                        safe_update(0.5 + 0.3 * val, f"[Dudosos] {text}")
+                        
+                    copier_doubtful = FileCopier(str(Path(dest_path) / "dudosos"))
+                    copied_doubtful, failed_doubtful = copier_doubtful.copy_books(
+                        doubtful_books, 
+                        progress_callback=safe_update_doubtful
+                    )
+                    copied.extend(copied_doubtful)
+                    failed.extend(failed_doubtful)
                 
                 # Report generation
                 safe_update(0.9, "Generando informes de copia...")
                 total_bytes = sum(b.file_size for b, _ in copied)
                 strategy_choice = self.strategy_menu.get()
                 
+                confirmed_dups = getattr(self, "confirmed_dups", [])
+                doubtful_dups = getattr(self, "doubtful_dups", [])
+                
                 summary_data = {
                     "Fecha de Sincronización": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Método de Comparación": strategy_choice,
-                    "Libros Analizados": len(self.new_books),
+                    "Libros Analizados": len(self.new_books) + len(confirmed_dups) + len(doubtful_dups),
                     "Libros Copiados con Éxito": len(copied),
                     "Errores de Copia": len(failed),
+                    "Duplicados Confirmados": len(confirmed_dups),
+                    "Duplicados Dudosos": len(doubtful_dups),
                     "Tamaño Total Copiado": format_size(total_bytes)
                 }
                 
                 # Generate Excel
                 excel_report_path = Path(dest_path) / "informe_bibliosync.xlsx"
-                generate_excel_report(excel_report_path, copied, failed, summary_data)
+                generate_excel_report(excel_report_path, copied, failed, confirmed_dups, doubtful_dups, summary_data)
                 
                 # Generate CSV
                 csv_report_dir = Path(dest_path) / "informes_csv"
-                generate_csv_report(csv_report_dir, copied, failed, summary_data)
+                generate_csv_report(csv_report_dir, copied, failed, confirmed_dups, doubtful_dups, summary_data)
                 
                 # Store history record
                 try:

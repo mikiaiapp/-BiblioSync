@@ -186,6 +186,39 @@ class TestBiblioSync(unittest.TestCase):
         self.assertEqual(len(new_books), 1)
         self.assertEqual(new_books[0].file_name, "Some Title - Some Author.epub")
 
+    def test_author_title_parent_folder_comparison(self):
+        # 1. Index calibre library and update book metadata in DB
+        indexer = LibraryIndexer(str(self.calibre_dir))
+        indexer.sync_index()
+        
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE books SET title = ?, author = ? WHERE file_name LIKE ?",
+                ("El dragón y el unicornio", "A. A. Attanasio", "%Book 1%")
+            )
+            conn.commit()
+
+        # 2. Add book to source folders nested inside an Author folder:
+        # - source_dir / "A_A_Attanasio" / "El_dragon_y_el_unicornio.epub" (no separator, empty metadata fallback)
+        self._create_dummy_file(self.source_dir / "A_A_Attanasio" / "El_dragon_y_el_unicornio.epub", "Content of dragon")
+
+        # 3. Scan source folders
+        scanner = LibraryScanner([str(self.source_dir)])
+        scanned_books = scanner.scan()
+
+        # 4. Compare using Title & Author strategy
+        comparer = BookComparer(AuthorTitleStrategy())
+        new_books, duplicates = comparer.compare_books(scanned_books)
+
+        # "El_dragon_y_el_unicornio.epub" should match "El dragón y el unicornio" by "A. A. Attanasio"
+        # because the author is deduced from the parent directory "A_A_Attanasio"
+        self.assertEqual(len(new_books), 0)
+        self.assertEqual(len(duplicates), 1)
+        scanned, matched = duplicates[0]
+        self.assertEqual(scanned.file_name, "El_dragon_y_el_unicornio.epub")
+        self.assertEqual(matched.title, "El dragón y el unicornio")
+
     def test_copier_and_renaming_collision(self):
         # Create books to copy
         book1 = Book(
@@ -234,12 +267,12 @@ class TestBiblioSync(unittest.TestCase):
         
         # Excel
         excel_path = self.dest_dir / "report.xlsx"
-        generate_excel_report(excel_path, copied, failed, summary)
+        generate_excel_report(excel_path, copied, failed, [], [], summary)
         self.assertTrue(excel_path.exists())
         
         # CSV
         csv_dir = self.dest_dir / "csv_reports"
-        generate_csv_report(csv_dir, copied, failed, summary)
+        generate_csv_report(csv_dir, copied, failed, [], [], summary)
         self.assertTrue((csv_dir / "copied_books.csv").exists())
         self.assertTrue((csv_dir / "errors.csv").exists())
         self.assertTrue((csv_dir / "summary.csv").exists())
