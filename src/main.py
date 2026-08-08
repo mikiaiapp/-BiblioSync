@@ -374,7 +374,7 @@ def run_copy_task(progress_callback):
             
     except Exception as e:
         logger.error(f"Error durante el proceso de copia: {e}")
-        progress_callback(1.0, f"Error: {e}")"Error: {e}")
+        progress_callback(1.0, f"Error: {e}")
 
 # Mount static files and redirect homepage to index.html
 web_dir = Path(__file__).parent / "web"
