@@ -172,7 +172,7 @@ class LibraryIndexer:
                         
                         mtime_val = parse_calibre_date(last_modified_str)
                         file_name = f"{file_name_without_ext}.{fmt}"
-                        abs_path = Path(self.main_library_path) / Path(rel_dir) / file_name
+                        abs_path = Path(metadata_db_path.parent) / Path(rel_dir) / file_name
                         abs_path_str = str(abs_path.resolve())
                         
                         book = Book(
