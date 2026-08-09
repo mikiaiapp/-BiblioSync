@@ -230,8 +230,8 @@ class TestBiblioSync(unittest.TestCase):
         )
         self._create_dummy_file(Path(book1.file_path), "Ebook Content")
         
-        # Pre-create a file with the same name in destination
-        self._create_dummy_file(self.dest_dir / "Book 1.epub", "Existing file")
+        # Pre-create a file with the same name in destination's author subfolder
+        self._create_dummy_file(self.dest_dir / "Autor Desconocido" / "Book 1.epub", "Existing file")
         
         # Copy
         copier = FileCopier(str(self.dest_dir))

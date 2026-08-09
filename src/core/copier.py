@@ -60,11 +60,21 @@ class FileCopier:
                 continue
                 
             try:
-                dest_path = get_unique_path(self.destination_dir, book.file_name)
+                # Resolve author subfolder (sanitize name for paths)
+                author = book.author.strip() if book.author else "Autor Desconocido"
+                # Remove characters that are invalid in directory names (Windows / POSIX compatible)
+                for c in ['\\', '/', ':', '*', '?', '"', '<', '>', '|']:
+                    author = author.replace(c, '_')
+                
+                # Make sure the author directory is created
+                author_dir = self.destination_dir / author
+                author_dir.mkdir(parents=True, exist_ok=True)
+                
+                dest_path = get_unique_path(author_dir, book.file_name)
                 shutil.copy2(src_path, dest_path)
                 copied_path_str = str(dest_path.resolve())
                 copied_books.append((book, copied_path_str))
-                logger.info(f"Copiado con éxito: {book.file_name} -> {dest_path.name}")
+                logger.info(f"Copiado con éxito: {book.file_name} -> {author}/{dest_path.name}")
             except Exception as e:
                 err_msg = str(e)
                 logger.error(f"Error al copiar {book.file_name}: {err_msg}")
