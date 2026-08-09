@@ -146,10 +146,18 @@ function connectWebSocket() {
 // Append log helper
 function appendLog(line) {
     const consoleEl = document.getElementById("log-console");
-    if (consoleEl.innerText === "Cargando consola...") {
-        consoleEl.innerText = "";
+    if (consoleEl.textContent === "Cargando consola...") {
+        consoleEl.textContent = "";
     }
-    consoleEl.innerText += line + "\n";
+    
+    // Create text node for better performance (no reflow until appended)
+    const textNode = document.createTextNode(line + "\n");
+    consoleEl.appendChild(textNode);
+    
+    // Limit log rows to prevent memory crash (keep last 1000 nodes)
+    while (consoleEl.childNodes.length > 1000) {
+        consoleEl.removeChild(consoleEl.firstChild);
+    }
     
     // Auto scroll to bottom
     const wrapper = consoleEl.parentElement;
@@ -322,12 +330,12 @@ async function navigateFolder(targetPath) {
                 `;
                 div.onclick = (e) => {
                     // Double click to navigate in
-                    if (div.classList.contains("selected")) {
+                    if (div.classList.contains("active")) {
                         navigateFolder(dir.path);
                     } else {
                         // Single click to select
-                        document.querySelectorAll(".folder-item").forEach(el => el.classList.remove("selected"));
-                        div.classList.add("selected");
+                        document.querySelectorAll(".folder-item").forEach(el => el.classList.remove("active"));
+                        div.classList.add("active");
                         selectedFolderInBrowser = dir.path;
                     }
                 };
