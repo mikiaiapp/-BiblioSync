@@ -143,22 +143,39 @@ function connectWebSocket() {
     };
 }
 
+let logQueue = [];
+let logTimeout = null;
+
 // Append log helper
 function appendLog(line) {
+    logQueue.push(line);
+    if (!logTimeout) {
+        logTimeout = setTimeout(flushLogQueue, 50); // Batch logs every 50ms
+    }
+}
+
+function flushLogQueue() {
+    logTimeout = null;
+    if (logQueue.length === 0) return;
+
     const consoleEl = document.getElementById("log-console");
     if (consoleEl.textContent === "Cargando consola...") {
         consoleEl.textContent = "";
     }
-    
-    // Create text node for better performance (no reflow until appended)
-    const textNode = document.createTextNode(line + "\n");
-    consoleEl.appendChild(textNode);
-    
+
+    const fragment = document.createDocumentFragment();
+    logQueue.forEach(line => {
+        fragment.appendChild(document.createTextNode(line + "\n"));
+    });
+    logQueue = [];
+
+    consoleEl.appendChild(fragment);
+
     // Limit log rows to prevent memory crash (keep last 1000 nodes)
     while (consoleEl.childNodes.length > 1000) {
         consoleEl.removeChild(consoleEl.firstChild);
     }
-    
+
     // Auto scroll to bottom
     const wrapper = consoleEl.parentElement;
     wrapper.scrollTop = wrapper.scrollHeight;

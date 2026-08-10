@@ -432,20 +432,20 @@ class MainWindow(ctk.CTk):
                 copied = []
                 failed = []
                 if self.new_books:
-                    copier = FileCopier(dest_path)
+                    copier = FileCopier(str(Path(dest_path) / "libros_a_importar"))
                     copied, failed = copier.copy_books(self.new_books, progress_callback=safe_update)
                 
                 confirmed_dups = getattr(self, "confirmed_dups", [])
                 doubtful_dups = getattr(self, "doubtful_dups", [])
                 
                 if doubtful_dups:
-                    logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'dudosos'...")
+                    logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'libros_dudosos'...")
                     doubtful_books = [scanned for scanned, _ in doubtful_dups]
                     
                     def safe_update_doubtful(val, text):
                         safe_update(0.5 + 0.3 * val, f"[Dudosos] {text}")
                         
-                    copier_doubtful = FileCopier(str(Path(dest_path) / "dudosos"))
+                    copier_doubtful = FileCopier(str(Path(dest_path) / "libros_dudosos"))
                     copied_doubtful, failed_doubtful = copier_doubtful.copy_books(
                         doubtful_books, 
                         progress_callback=safe_update_doubtful

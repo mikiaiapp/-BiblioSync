@@ -300,20 +300,20 @@ def run_copy_task(progress_callback):
         failed = []
         
         if books_to_copy:
-            copier = FileCopier(dest_path)
+            copier = FileCopier(str(Path(dest_path) / "libros_a_importar"))
             copied, failed = copier.copy_books(books_to_copy, progress_callback=progress_callback)
         else:
             logger.info("No hay libros nuevos para copiar.")
             
         if doubtful_dups:
-            logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'dudosos'...")
+            logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'libros_dudosos'...")
             doubtful_books = [scanned for scanned, _ in doubtful_dups]
             
             def progress_callback_doubtful(val, text):
                 if progress_callback:
                     progress_callback(0.5 + 0.3 * val, f"[Dudosos] {text}")
                     
-            copier_doubtful = FileCopier(str(Path(dest_path) / "dudosos"))
+            copier_doubtful = FileCopier(str(Path(dest_path) / "libros_dudosos"))
             copied_doubtful, failed_doubtful = copier_doubtful.copy_books(
                 doubtful_books, 
                 progress_callback=progress_callback_doubtful
