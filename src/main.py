@@ -295,16 +295,16 @@ def run_copy_task(progress_callback):
             progress_callback(1.0, "No hay libros nuevos para copiar.")
             return
 
-        dest_path = settings.destination_folder
-        copied = []
-        failed = []
-        
+        copied_new = []
+        failed_new = []
         if books_to_copy:
             copier = FileCopier(str(Path(dest_path) / "libros_a_importar"))
-            copied, failed = copier.copy_books(books_to_copy, progress_callback=progress_callback)
+            copied_new, failed_new = copier.copy_books(books_to_copy, progress_callback=progress_callback)
         else:
             logger.info("No hay libros nuevos para copiar.")
             
+        copied_doubtful = []
+        failed_doubtful = []
         if doubtful_dups:
             logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'libros_dudosos'...")
             doubtful_books = [scanned for scanned, _ in doubtful_dups]
@@ -318,8 +318,9 @@ def run_copy_task(progress_callback):
                 doubtful_books, 
                 progress_callback=progress_callback_doubtful
             )
-            copied.extend(copied_doubtful)
-            failed.extend(failed_doubtful)
+        
+        copied = copied_new + copied_doubtful
+        failed = failed_new + failed_doubtful
         
         # 2. Report generation
         progress_callback(0.9, "Generando informes...")
@@ -329,10 +330,11 @@ def run_copy_task(progress_callback):
             "Fecha de Sincronización": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Método de Comparación": settings.last_comparison_method,
             "Libros Analizados": len(books_to_copy) + len(confirmed_dups) + len(doubtful_dups),
-            "Libros Copiados con Éxito": len(copied),
-            "Errores de Copia": len(failed),
+            "Libros Nuevos Copiados con Éxito": len(copied_new),
+            "Libros Dudosos Copiados con Éxito": len(copied_doubtful),
             "Duplicados Confirmados": len(confirmed_dups),
-            "Duplicados Dudosos": len(doubtful_dups),
+            "Errores de Copia (Nuevos)": len(failed_new),
+            "Errores de Copia (Dudosos)": len(failed_doubtful),
             "Tamaño Total Copiado": format_size(total_bytes)
         }
         
@@ -355,7 +357,7 @@ def run_copy_task(progress_callback):
                     summary_data["Fecha de Sincronización"],
                     len(copied),
                     len(failed),
-                    f"Copias: {len(copied)}, Duplicados: {len(confirmed_dups) + len(doubtful_dups)}"
+                    f"Nuevos: {len(copied_new)}, Dudosos: {len(copied_doubtful)}, Duplicados: {len(confirmed_dups)}"
                 ))
                 conn.commit()
         except Exception as db_err:

@@ -429,15 +429,17 @@ class MainWindow(ctk.CTk):
         def run_copy_thread():
             try:
                 safe_update(0.0, "Preparando copia...")
-                copied = []
-                failed = []
+                copied_new = []
+                failed_new = []
                 if self.new_books:
                     copier = FileCopier(str(Path(dest_path) / "libros_a_importar"))
-                    copied, failed = copier.copy_books(self.new_books, progress_callback=safe_update)
+                    copied_new, failed_new = copier.copy_books(self.new_books, progress_callback=safe_update)
                 
                 confirmed_dups = getattr(self, "confirmed_dups", [])
                 doubtful_dups = getattr(self, "doubtful_dups", [])
                 
+                copied_doubtful = []
+                failed_doubtful = []
                 if doubtful_dups:
                     logger.info(f"Copiando {len(doubtful_dups)} libros dudosos a la subcarpeta 'libros_dudosos'...")
                     doubtful_books = [scanned for scanned, _ in doubtful_dups]
@@ -450,8 +452,9 @@ class MainWindow(ctk.CTk):
                         doubtful_books, 
                         progress_callback=safe_update_doubtful
                     )
-                    copied.extend(copied_doubtful)
-                    failed.extend(failed_doubtful)
+                
+                copied = copied_new + copied_doubtful
+                failed = failed_new + failed_doubtful
                 
                 # Report generation
                 safe_update(0.9, "Generando informes de copia...")
@@ -465,10 +468,11 @@ class MainWindow(ctk.CTk):
                     "Fecha de Sincronización": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Método de Comparación": strategy_choice,
                     "Libros Analizados": len(self.new_books) + len(confirmed_dups) + len(doubtful_dups),
-                    "Libros Copiados con Éxito": len(copied),
-                    "Errores de Copia": len(failed),
+                    "Libros Nuevos Copiados con Éxito": len(copied_new),
+                    "Libros Dudosos Copiados con Éxito": len(copied_doubtful),
                     "Duplicados Confirmados": len(confirmed_dups),
-                    "Duplicados Dudosos": len(doubtful_dups),
+                    "Errores de Copia (Nuevos)": len(failed_new),
+                    "Errores de Copia (Dudosos)": len(failed_doubtful),
                     "Tamaño Total Copiado": format_size(total_bytes)
                 }
                 
@@ -491,7 +495,7 @@ class MainWindow(ctk.CTk):
                             summary_data["Fecha de Sincronización"],
                             len(copied),
                             len(failed),
-                            f"Copias: {len(copied)}, Errores: {len(failed)}"
+                            f"Nuevos: {len(copied_new)}, Dudosos: {len(copied_doubtful)}, Duplicados: {len(confirmed_dups)}"
                         ))
                         conn.commit()
                 except Exception as db_err:
