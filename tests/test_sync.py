@@ -219,6 +219,52 @@ class TestBiblioSync(unittest.TestCase):
         self.assertEqual(scanned.file_name, "El_dragon_y_el_unicornio.epub")
         self.assertEqual(matched.title, "El dragón y el unicornio")
 
+    def test_author_title_similarity_comparison(self):
+        # 1. Index calibre library and update book metadata in DB
+        indexer = LibraryIndexer(str(self.calibre_dir))
+        indexer.sync_index()
+        
+        with db_manager.get_connection() as conn:
+            cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+            # Set book 1 to "El profesor de gimnasia" by "Erle Stanley Gardner «A. A. Fair»"
+            cursor.execute(
+                "UPDATE books SET title = ?, author = ? WHERE file_name LIKE ?",
+                ("El profesor de gimnasia", "Erle Stanley Gardner «A. A. Fair»", "%Book 1%")
+            )
+            # Set book 2 to "Arsène Lupin, caballero ladrón" by "Maurice Marie Émile Leblanc"
+            cursor.execute(
+                "UPDATE books SET title = ?, author = ? WHERE file_name LIKE ?",
+                ("Arsène Lupin, caballero ladrón", "Maurice Marie Émile Leblanc", "%Book 2%")
+            )
+            conn.commit()
+
+        # 2. Add books to source folders:
+        # - "El profesor de gimnasia - A. A. Fair.epub" (similar author - initials/pen name)
+        # - "Arsène Lupin, caballero ladrón - Maurice Leblanc.epub" (similar author - incomplete name)
+        # - "El profesor de gimnasia - Elena de la Cruz.epub" (completely different author -> NEW book)
+        self._create_dummy_file(self.source_dir / "El profesor de gimnasia - A. A. Fair.epub", "Content 1")
+        self._create_dummy_file(self.source_dir / "Arsène Lupin, caballero ladrón - Maurice Leblanc.epub", "Content 2")
+        self._create_dummy_file(self.source_dir / "El profesor de gimnasia - Elena de la Cruz.epub", "Content 3")
+
+        # 3. Scan source folders
+        scanner = LibraryScanner([str(self.source_dir)])
+        scanned_books = scanner.scan()
+
+        # 4. Compare using Title & Author strategy
+        comparer = BookComparer(AuthorTitleStrategy())
+        new_books, duplicates = comparer.compare_books(scanned_books)
+
+        # "El profesor de gimnasia - A. A. Fair.epub" and "Arsène Lupin, caballero ladrón - Maurice Leblanc.epub"
+        # should be classified as duplicates (and will later be marked as doubtful since they aren't exact matches).
+        # "El profesor de gimnasia - Elena de la Cruz.epub" has a completely different author, so it should be new.
+        self.assertEqual(len(new_books), 1)
+        self.assertEqual(new_books[0].file_name, "El profesor de gimnasia - Elena de la Cruz.epub")
+        self.assertEqual(len(duplicates), 2)
+        
+        dup_names = {scanned.file_name for scanned, _ in duplicates}
+        self.assertIn("El profesor de gimnasia - A. A. Fair.epub", dup_names)
+        self.assertIn("Arsène Lupin, caballero ladrón - Maurice Leblanc.epub", dup_names)
+
     def test_copier_and_renaming_collision(self):
         # Create books to copy
         book1 = Book(

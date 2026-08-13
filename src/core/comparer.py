@@ -13,6 +13,7 @@ from src.core.metadata import MetadataExtractor
 from src.core.hashing import calculate_sha256
 from src.utils.logger import logger
 import unicodedata
+import difflib
 
 def normalize_title(title: str) -> str:
     """Normalizes book title for comparison: lowercase, alphanumeric characters only."""
@@ -31,6 +32,74 @@ def normalize_author(author: str) -> str:
     # Sort alphabetically to treat "Lastname, Firstname" and "Firstname Lastname" as identical
     words.sort()
     return " ".join(words)
+
+def get_author_words(author: str) -> List[str]:
+    """Helper to extract alphanumeric words from author name for similarity matching."""
+    if not author:
+        return []
+    author_normalized = unicodedata.normalize('NFKD', author).encode('ASCII', 'ignore').decode('utf-8')
+    cleaned = "".join(c if c.isalnum() else " " for c in author_normalized.lower())
+    return cleaned.split()
+
+def are_words_similar(w1: str, w2: str) -> bool:
+    """Checks if two author name words are similar (handles initials and typos)."""
+    if w1 == w2:
+        return True
+    # Initial match: if either is an initial (length 1), check if other starts with it
+    if len(w1) == 1 and w2.startswith(w1):
+        return True
+    if len(w2) == 1 and w1.startswith(w2):
+        return True
+    # Fuzzy match for longer words to tolerate typos
+    if len(w1) > 3 and len(w2) > 3:
+        if difflib.SequenceMatcher(None, w1, w2).ratio() >= 0.8:
+            return True
+    return False
+
+def is_subset_initials(sub_words: List[str], full_words: List[str]) -> bool:
+    """Checks if all words in sub_words match a unique word in full_words (with similarity/initial support)."""
+    if not sub_words:
+        return False
+    used_indices = set()
+    for s_word in sub_words:
+        matched = False
+        for i, f_word in enumerate(full_words):
+            if i in used_indices:
+                continue
+            if are_words_similar(s_word, f_word):
+                used_indices.add(i)
+                matched = True
+                break
+        if not matched:
+            return False
+    return True
+
+def are_authors_similar(author1: str, author2: str) -> bool:
+    """Evaluates if two author names are similar (e.g. subsets, containing initials, full names)."""
+    words1 = get_author_words(author1)
+    words2 = get_author_words(author2)
+    return is_subset_initials(words1, words2) or is_subset_initials(words2, words1)
+
+def find_match_by_title_author(title: str, author: str, title_map: dict) -> Book:
+    """Looks for a match in title_map by title and similar/exact author."""
+    if not title:
+        return None
+    t_norm = normalize_title(title)
+    if t_norm not in title_map:
+        return None
+    
+    # 1st pass: exact match on normalized author
+    a_norm = normalize_author(author)
+    for b in title_map[t_norm]:
+        if normalize_author(b.author) == a_norm:
+            return b
+            
+    # 2nd pass: similar/fuzzy author match
+    for b in title_map[t_norm]:
+        if are_authors_similar(author, b.author):
+            return b
+            
+    return None
 
 def parse_filename_meta(filename: str) -> tuple[str, str]:
     """Tries to extract title and author from filename using common separators (e.g. Title - Author)."""
@@ -267,11 +336,14 @@ class AuthorTitleStrategy(ComparisonStrategy):
         logger.info("Comparing books using Title & Author strategy...")
         db_books = load_all_existing_books()
         
-        title_author_map = {}
+        # Group existing books by normalized title
+        title_map = {}
         for b in db_books:
             if b.title:
-                key = (normalize_title(b.title), normalize_author(b.author))
-                title_author_map[key] = b
+                t_norm = normalize_title(b.title)
+                if t_norm not in title_map:
+                    title_map[t_norm] = []
+                title_map[t_norm].append(b)
                 
         name_only_map = {b.file_name.lower(): b for b in db_books}
         
@@ -298,19 +370,15 @@ class AuthorTitleStrategy(ComparisonStrategy):
                         author_from_path = parent_name
                 
                 if part2:  # If we successfully parsed an author part
-                    t_norm1 = normalize_title(part1)
-                    a_norm1 = normalize_author(part2)
-                    t_norm2 = normalize_title(part2)
-                    a_norm2 = normalize_author(part1)
-                    
-                    if (t_norm1, a_norm1) in title_author_map:
-                        matched = title_author_map[(t_norm1, a_norm1)]
+                    matched = find_match_by_title_author(part1, part2, title_map)
+                    if matched:
                         book.title = part1
                         book.author = part2
-                    elif (t_norm2, a_norm2) in title_author_map:
-                        matched = title_author_map[(t_norm2, a_norm2)]
-                        book.title = part2
-                        book.author = part1
+                    else:
+                        matched = find_match_by_title_author(part2, part1, title_map)
+                        if matched:
+                            book.title = part2
+                            book.author = part1
                 
                 if not matched:
                     # 2. Slow path: extract metadata from the physical file
@@ -323,24 +391,17 @@ class AuthorTitleStrategy(ComparisonStrategy):
                         title = part1
                     
                     if title:
-                        book.title = title
-                        t_norm = normalize_title(title)
-                        
-                        # Try matching with metadata author
-                        if author:
+                        matched = find_match_by_title_author(title, author, title_map)
+                        if matched:
+                            book.title = title
                             book.author = author
-                            a_norm = normalize_author(author)
-                            if (t_norm, a_norm) in title_author_map:
-                                matched = title_author_map[(t_norm, a_norm)]
                         
                         # Try matching with author from parent folder if not matched yet
                         if not matched and author_from_path:
-                            a_norm_path = normalize_author(author_from_path)
-                            if (t_norm, a_norm_path) in title_author_map:
-                                matched = title_author_map[(t_norm, a_norm_path)]
-                                # Update book author if it was empty/unknown
-                                if not book.author or book.author.lower() in ("unknown", "desconocido"):
-                                    book.author = author_from_path
+                            matched = find_match_by_title_author(title, author_from_path, title_map)
+                            if matched:
+                                book.title = title
+                                book.author = author_from_path
                             
                 if not matched:
                     # 3. Fallback path: Name Only (case-insensitive filename comparison)
