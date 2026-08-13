@@ -284,6 +284,11 @@ def run_copy_task(progress_callback):
     try:
         progress_callback(0.05, "Iniciando copia de archivos...")
         settings.load()
+        dest_path = settings.destination_folder
+        if not dest_path:
+            logger.error("Debe configurar la ruta de la carpeta de destino.")
+            progress_callback(1.0, "Error: Ruta de destino no configurada.")
+            return
         
         with global_new_books_lock:
             books_to_copy = list(global_new_books)
