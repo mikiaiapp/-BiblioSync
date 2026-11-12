@@ -24,6 +24,7 @@ Está desarrollada como una **aplicación web nativa** utilizando **FastAPI** en
    - **Informes CSV:** Exporta los mismos datos a ficheros CSV individuales bajo la subcarpeta `informes_csv`.
 7. **Historial de Ejecuciones:** Almacena de forma persistente y muestra una tabla con las estadísticas de las últimas sincronizaciones realizadas.
 8. **Ejecución Asíncrona Hilo-Segura:** Los procesos pesados (escaneo, copia, indexación) se ejecutan en segundo plano en el servidor y transmiten el progreso en tiempo real mediante WebSockets, evitando que la interfaz se congele.
+*   **Móvil:** en pantallas táctiles, deslizar hacia abajo desde arriba actualiza la página.
 
 ---
 
